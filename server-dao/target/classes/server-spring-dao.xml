@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:util="http://www.springframework.org/schema/util" xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xsi:schemaLocation="http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd     http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd">
+
+    <!--<util:properties id="config_dev" location="classpath:config_dev.properties"/>-->
+    <!--  <bean id="propertyConfigurer_dev" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+          <property name="locations">
+              <list>
+                  &lt;!&ndash; 这里支持多种寻址方式：classpath和file &ndash;&gt;
+                  <value>classpath*:config_dev.properties</value>
+              </list>
+          </property>
+      </bean>-->
+
+    <!-- Druid数据源配置 -->
+    <bean id="dataSource" class="com.alibaba.druid.pool.DruidDataSource" init-method="init" destroy-method="close">
+        <property name="DriverClassName" value="com.mysql.jdbc.Driver"/>
+        <property name="url" value="jdbc:mysql://localhost:3306/cas_center?useUnicode=true&amp;autoReconnect=true&amp;rewriteBatchedStatements=TRUE"/>
+        <property name="username" value="root"/>
+        <property name="password" value="lohas"/>
+        <property name="maxActive" value="20"/>
+        <property name="initialSize" value="5"/>
+        <!-- 获取连接最大等待时间 -->
+        <property name="maxWait" value="30000"/>
+        <!-- 连接池最小空闲 -->
+        <property name="minIdle" value="2"/>
+        <!-- 逐出连接的检测时间间隔 -->
+        <property name="timeBetweenEvictionRunsMillis" value="3000"/>
+        <!-- 最小逐出时间 -->
+        <property name="minEvictableIdleTimeMillis" value="300000"/>
+        <!-- 测试有效用的SQL Query -->
+        <property name="validationQuery" value="select 1"/>
+        <!-- 连接空闲时测试是否有效 -->
+        <property name="testWhileIdle" value="true"/>
+        <!-- 获取连接时测试是否有效 -->
+        <property name="testOnBorrow" value="false"/>
+        <!-- 归还连接时是否测试有效 -->
+        <property name="testOnReturn" value="false"/>
+        <!-- 监控 -->
+        <property name="filters" value="wall,mergeStat"/>
+        <!-- 日志保存 -->
+        <property name="timeBetweenLogStatsMillis" value="300000" />
+        <!-- 慢SQL记录 -->
+        <property name="connectionProperties" value="druid.stat.slowSqlMillis=5000" />
+
+        <!-- 打开PSCache，并且指定每个连接上PSCache的大小 -->
+        <property name="poolPreparedStatements" value="true" />
+        <property name="maxPoolPreparedStatementPerConnectionSize" value="20" />
+
+        <!-- 打开removeAbandoned功能 发生连接泄漏时开启 -->
+        <!--<property name="removeAbandoned" value="true" />-->
+        <!-- 1800秒，也就是30分钟 -->
+        <!--<property name="removeAbandonedTimeout" value="1800" />-->
+        <!-- 关闭abanded连接时输出错误日志 -->
+        <!--<property name="logAbandoned" value="true" />-->
+    </bean>
+
+
+    <!-- MyBatis配置 -->
+    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        <property name="dataSource" ref="dataSource"/>
+        <!-- 自动扫描entity目录, 省掉Configuration.xml里的手工配置 别名 -->
+        <property name="typeAliasesPackage" value="com.sz.weizy.passport.dao.entities"/>
+
+        <property name="configLocation" value="classpath:mybatis/configuration.xml"/>
+
+        <!-- 显式指定Mapper文件位置 -->
+        <property name="mapperLocations">
+            <list>
+                <value>
+                    classpath:mybatis/sqlmap/mysql/**/*.xml
+                </value>
+            </list>
+        </property>
+    </bean>
+
+
+    <!-- 扫描basePackage接口 dao层的实现类 -->
+    <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <property name="basePackage" value="com.sz.weizy.passport.dao.mapper"/>
+        <property name="sqlSessionFactoryBeanName" value="sqlSessionFactory"/>
+    </bean>
+
+
+
+    <!-- 事务管理 -->
+    <bean id="sw" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+        <property name="dataSource" ref="dataSource"></property>
+        <qualifier type="org.springframework.beans.factory.annotation.Qualifier" value="sw" />
+    </bean>
+
+    <!-- 声明事务 -->
+    <tx:advice id="txAdvice" transaction-manager="sw">
+        <tx:attributes>
+            <tx:method name="save*" propagation="REQUIRED" />
+            <tx:method name="add*" propagation="REQUIRED" />
+            <tx:method name="update*" propagation="REQUIRED" />
+            <tx:method name="merge*" propagation="REQUIRED" />
+            <tx:method name="del*" propagation="REQUIRED" />
+            <tx:method name="get*" propagation="SUPPORTS" read-only="true" />
+            <tx:method name="qry*" propagation="SUPPORTS" read-only="true" />
+            <tx:method name="count*" propagation="SUPPORTS" read-only="true" />
+            <tx:method name="*" propagation="SUPPORTS" read-only="true" />
+        </tx:attributes>
+    </tx:advice>
+    <aop:config>
+        <aop:pointcut id="txPointcut" expression="execution(* com.sz.weizy..service.*.*(..))" />
+        <aop:advisor advice-ref="txAdvice" pointcut-ref="txPointcut" />
+    </aop:config>
+
+    <!-- cas cglib 不能代理 final 类 不能使用这个注解  -->
+    <!-- @Transactional("sw") -->
+    <!-- 使用annotation定义数据库事务 -->
+    <!--<tx:annotation-driven transaction-manager="sw"  proxy-target-class="true" />-->
+
+
+    <!--   annotation  -->
+    <context:annotation-config />
+    <!-- 使用annotation 自动注册bean,并检查@Required,@Autowired的属性已被注入 -->
+    <context:component-scan base-package="com.sz.weizy.passport.dao,com.sz.weizy.passport.cas">
+        <context:exclude-filter type="annotation" expression="org.springframework.stereotype.Controller"/>
+    </context:component-scan>
+</beans>
